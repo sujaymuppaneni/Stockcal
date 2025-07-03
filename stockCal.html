@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Stock Calculator with Brokerage & Charges</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f4f7;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 700px;
+      background: white;
+      margin: auto;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    label {
+      font-weight: bold;
+      margin-top: 10px;
+      display: block;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      font-size: 16px;
+      margin-top: 20px;
+      border-radius: 5px;
+    }
+
+    .result {
+      margin-top: 20px;
+      background: #e8f1ff;
+      padding: 15px;
+      border-radius: 10px;
+    }
+
+    .result p {
+      margin: 5px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Stock Calculator (Intraday / Delivery)</h1>
+
+    <label>Trade Mode:</label>
+    <select id="mode">
+      <option value="intraday">Intraday</option>
+      <option value="delivery">Delivery</option>
+    </select>
+
+    <label>Trade Type:</label>
+    <select id="tradeType">
+      <option value="buy">Buy</option>
+      <option value="sell">Sell</option>
+    </select>
+
+    <label>Your Capital (₹):</label>
+    <input type="number" id="capital" />
+
+    <label>Leverage (1x for delivery):</label>
+    <input type="number" id="leverage" />
+
+    <label>Entry Price (Buy/Sell):</label>
+    <input type="number" id="entryPrice" />
+
+    <label>Stop-Loss (%):</label>
+    <input type="number" id="stopLossPercent" />
+
+    <label>Target Price:</label>
+    <input type="number" id="targetPrice" />
+
+    <button onclick="calculate()">Calculate</button>
+
+    <div class="result" id="result" style="display:none;"></div>
+  </div>
+
+  <script>
+    function calculate() {
+      const mode = document.getElementById("mode").value;
+      const tradeType = document.getElementById("tradeType").value;
+      const capital = parseFloat(document.getElementById("capital").value);
+      const leverage = parseFloat(document.getElementById("leverage").value);
+      const entryPrice = parseFloat(document.getElementById("entryPrice").value);
+      const stopLossPercent = parseFloat(document.getElementById("stopLossPercent").value);
+      const targetPrice = parseFloat(document.getElementById("targetPrice").value);
+
+      if ([capital, leverage, entryPrice, stopLossPercent, targetPrice].some(isNaN)) {
+        alert("Please enter all values correctly.");
+        return;
+      }
+
+      const buyingPower = capital * leverage;
+      const shares = Math.floor(buyingPower / entryPrice);
+      const turnoverBuy = shares * entryPrice;
+      const turnoverSell = shares * targetPrice;
+      const totalTurnover = turnoverBuy + turnoverSell;
+
+      // === Brokerage ===
+      const brokerageRate = (mode === "intraday") ? 0.0003 : 0.003;
+      const brokerageBuy = Math.min(turnoverBuy * brokerageRate, 20);
+      const brokerageSell = Math.min(turnoverSell * brokerageRate, 20);
+      const brokerage = brokerageBuy + brokerageSell;
+
+      // === STT ===
+      <!--A button to initiate a buy--!>
+<fyers-button data-fyers="API_KEY" 
+data-symbol="NSE:SBIN-EQ"
+data-product="INTRADAY"
+data-quantity=1
+data-price=102 
+data-order_type="LIMIT"
+data-transaction_type="BUY">
+</fyers-button>
+      let stt = 0;
+      if (mode === "intraday") {
+        stt = turnoverSell * 0.00025;
+      } else if (mode === "delivery") {
+        stt = (turnoverBuy + turnoverSell) * 0.001;
+      }
+      <!--A button to initiate a buy--!>
+<fyers-button data-fyers="API_KEY" 
+data-symbol="NSE:SBIN-EQ"
+data-product="INTRADAY"
+data-quantity=1
+data-price=102 
+data-order_type="LIMIT"
+data-transaction_type="SELL">
+</fyers-button>
+      // === Exchange Fees (same for both) ===
+      const exchangeFees = totalTurnover * 0.0000297;
+
+      // === Stamp Duty ===
+      const stampDuty = (mode === "intraday") ? turnoverBuy * 0.00003 : turnoverBuy * 0.00015;
+
+      // === SEBI + IPFT ===
+      const sebi = totalTurnover * 0.000001;
+      const ipft = totalTurnover * 0.000001;
+
+      // === GST (18%) on brokerage + exchange + sebi + ipft
+      const gst = 0.18 * (brokerage + exchangeFees + sebi + ipft);
+
+      // === Total Charges
+      const totalCharges = brokerage + stt + exchangeFees + stampDuty + sebi + ipft + gst;
+
+      // === Stop Loss & Target Profit ===
+      let stopLossPrice, lossAmount, targetProfit;
+      if (tradeType === "buy") {
+        stopLossPrice = entryPrice - (entryPrice * stopLossPercent / 100);
+        lossAmount = (entryPrice - stopLossPrice) * shares;
+        targetProfit = (targetPrice - entryPrice) * shares;
+      } else {
+        stopLossPrice = entryPrice + (entryPrice * stopLossPercent / 100);
+        lossAmount = (stopLossPrice - entryPrice) * shares;
+        targetProfit = (entryPrice - targetPrice) * shares;
+      }
+
+      const netProfit = targetProfit - totalCharges;
+      const lossPercent = (lossAmount / capital) * 100;
+      const netProfitPercent = (netProfit / capital) * 100;
+
+      const resultHTML = `
+        <p><strong>Mode:</strong> ${mode.toUpperCase()} | <strong>Type:</strong> ${tradeType.toUpperCase()}</p>
+        <p><strong>Capital:</strong> ₹${capital.toFixed(2)} | Leverage: ${leverage}x</p>
+        <p><strong>Shares:</strong> ${shares} | Buying Power: ₹${buyingPower.toFixed(2)}</p>
+        <p><strong>Entry:</strong> ₹${entryPrice} | Target: ₹${targetPrice} | Stop-Loss Price: ₹${stopLossPrice.toFixed(2)}</p>
+        <p><strong>Gross Profit:</strong> ₹${targetProfit.toFixed(2)}</p>
+        <hr>
+        <p><strong>Total Charges:</strong> ₹${totalCharges.toFixed(2)}</p>
+        <p><strong>Net Profit After Charges:</strong> ₹${netProfit.toFixed(2)}</p>
+        <p><strong>Net ROI:</strong> ${netProfitPercent.toFixed(2)}%</p>
+        <p><strong>Max Loss at Stop-Loss:</strong> ₹${lossAmount.toFixed(2)} (${lossPercent.toFixed(2)}%)</p>
+      `;
+
+      document.getElementById("result").innerHTML = resultHTML;
+      document.getElementById("result").style.display = "block";
+    }
+  </script>
+  <script src="https://api-connect-docs.fyers.in/fyers-lib.js"></script>
+  
+
+</body>
+</html>
